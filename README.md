@@ -61,10 +61,12 @@ gh attestation verify FubarAPIStudio-win-x64.zip --repo Fubar83/Fubar-API-Studio
 Each release also ships a `SHA256SUMS.txt`; check integrity with `sha256sum -c SHA256SUMS.txt`
 (Linux/macOS) or `Get-FileHash` (Windows).
 
-> **OS code signing:** the binaries are **not yet** signed with an OS-trusted certificate, so Windows
-> SmartScreen may show "unknown publisher" and macOS Gatekeeper may need *right-click → Open* (or
-> `xattr -dr com.apple.quarantine "Fubar API Studio.app"`) on first launch. The provenance attestation
-> above is the current trust signal.
+> **OS code signing:** Windows Authenticode signing via [SignPath Foundation](https://signpath.org/)
+> (free for open source) is wired into the release pipeline but dormant until configured — see
+> [`docs/SIGNING.md`](docs/SIGNING.md). Until then, Windows SmartScreen may show "unknown publisher" and
+> macOS Gatekeeper may need *right-click → Open* (or
+> `xattr -dr com.apple.quarantine "Fubar API Studio.app"`) on first launch; the provenance attestation
+> above is the trust signal in the meantime.
 
 ## Build from source
 
