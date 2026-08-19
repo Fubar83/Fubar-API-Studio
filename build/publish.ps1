@@ -52,12 +52,22 @@ foreach ($rid in $Runtimes) {
         '-o', $publishDir,
         '--nologo',
         '-p:DebugType=none',
-        '-p:DebugSymbols=false'
+        '-p:DebugSymbols=false',
+        # Single-file deploy: one self-contained executable per platform. Avalonia's native libraries
+        # (Skia/HarfBuzz/etc.) are embedded and self-extracted at first launch; compression shrinks the
+        # download. Not trimmed - Avalonia relies on reflection/XAML, so trimming is unsafe here.
+        '-p:PublishSingleFile=true',
+        '-p:IncludeNativeLibrariesForSelfExtract=true',
+        '-p:EnableCompressionInSingleFile=true'
     )
     if ($Version) { $dotnetArgs += "-p:Version=$Version" }
 
     dotnet @dotnetArgs
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $rid" }
+
+    # SkiaSharp/HarfBuzzSharp ship native .pdb files that land next to the single exe; drop them so the
+    # deploy really is one file (they're debug symbols we don't distribute).
+    Get-ChildItem -LiteralPath $publishDir -Filter *.pdb -File -ErrorAction SilentlyContinue | Remove-Item -Force
 
     if ($rid -like 'osx-*') {
         Write-Host "    packaging .app bundle" -ForegroundColor DarkGray

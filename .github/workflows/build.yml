@@ -1,8 +1,9 @@
 name: build
 
-# Builds self-contained, cross-platform binaries. Each OS is built on its NATIVE runner so packaging is
-# correct (macOS .app keeps its executable bit / symlinks; Linux tar keeps +x). Runs on demand and on
-# version tags; a tag also publishes a GitHub Release with every artifact attached.
+# Builds self-contained, single-file, cross-platform binaries. Each OS is built on its NATIVE runner so
+# packaging is correct (macOS .app keeps its executable bit / symlinks; Linux tar keeps +x). Every
+# artifact gets a Sigstore build-provenance attestation (verifiable with `gh attestation verify`); a
+# version tag also publishes a GitHub Release with SHA-256 checksums attached.
 on:
   push:
     tags: ['v*']
@@ -21,6 +22,10 @@ jobs:
           - os: macos-latest
             rids: osx-arm64,osx-x64
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write      # OIDC token for Sigstore signing
+      attestations: write  # store the provenance attestation on the repo
     steps:
       - uses: actions/checkout@v7
 
@@ -35,6 +40,16 @@ jobs:
           RIDS: ${{ matrix.rids }}
           # Empty on workflow_dispatch (script falls back to 1.0.0); the tag name (e.g. v1.2.3) otherwise.
           VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
+      # Cryptographically attests that these exact archives were built by this workflow from this commit
+      # (Sigstore-backed, free). Consumers verify with:
+      #   gh attestation verify <file> --repo ${{ github.repository }}
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            artifacts/*.zip
+            artifacts/*.tar.gz
 
       - uses: actions/upload-artifact@v7
         with:
@@ -54,7 +69,18 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: dist
+
+      - name: Generate SHA-256 checksums
+        run: |
+          cd dist
+          find . -type f \( -name '*.zip' -o -name '*.tar.gz' \) | while read -r f; do
+            printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$(basename "$f")"
+          done | sort -k2 > ../SHA256SUMS.txt
+          echo "== SHA256SUMS.txt =="; cat ../SHA256SUMS.txt
+
       - uses: softprops/action-gh-release@v3
         with:
-          files: dist/**/*
+          files: |
+            dist/**/*
+            SHA256SUMS.txt
           generate_release_notes: true

@@ -39,8 +39,8 @@ secrets, import OpenAPI/Swagger specs, and handle real OAuth 2.0 flows — all f
 
 ## Download
 
-Pre-built, self-contained binaries (no runtime install required) are attached to each
-[GitHub Release](https://github.com/Fubar83/Fubar-API-Studio/releases):
+Pre-built, **single-file, self-contained** binaries (no runtime install required — one executable per
+platform) are attached to each [GitHub Release](https://github.com/Fubar83/Fubar-API-Studio/releases):
 
 | Platform | Artifact |
 | --- | --- |
@@ -48,8 +48,23 @@ Pre-built, self-contained binaries (no runtime install required) are attached to
 | Linux (x64 / ARM64)   | `FubarAPIStudio-linux-*.tar.gz` |
 | macOS (Apple Silicon / Intel) | `FubarAPIStudio-osx-*.zip` (a `.app` bundle) |
 
-> On macOS the app is currently **unsigned** — first launch may need
-> *right-click → Open* (or `xattr -dr com.apple.quarantine "Fubar API Studio.app"`).
+### Verify your download
+
+Every release artifact is built entirely in GitHub Actions and carries a **Sigstore build-provenance
+attestation** — proof it was built by this repo's CI from a specific commit. Verify it with the
+[GitHub CLI](https://cli.github.com/):
+
+```bash
+gh attestation verify FubarAPIStudio-win-x64.zip --repo Fubar83/Fubar-API-Studio
+```
+
+Each release also ships a `SHA256SUMS.txt`; check integrity with `sha256sum -c SHA256SUMS.txt`
+(Linux/macOS) or `Get-FileHash` (Windows).
+
+> **OS code signing:** the binaries are **not yet** signed with an OS-trusted certificate, so Windows
+> SmartScreen may show "unknown publisher" and macOS Gatekeeper may need *right-click → Open* (or
+> `xattr -dr com.apple.quarantine "Fubar API Studio.app"`) on first launch. The provenance attestation
+> above is the current trust signal.
 
 ## Build from source
 
