@@ -41,6 +41,32 @@ jobs:
           # Empty on workflow_dispatch (script falls back to 1.0.0); the tag name (e.g. v1.2.3) otherwise.
           VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
 
+      # --- Windows code signing (SignPath Foundation, free for OSS) --------------------------------
+      # Dormant until configured: runs only on the Windows leg when the SIGNPATH_PROJECT_SLUG repo
+      # variable is set. Signs the PE files inside the just-built Windows zip(s) IN PLACE (overwriting
+      # artifacts/*.zip), before attestation + upload, so everything downstream (provenance, checksums,
+      # release) covers the signed files. See docs/SIGNING.md for the one-time setup.
+      - name: Upload Windows zip for signing
+        if: runner.os == 'Windows' && vars.SIGNPATH_PROJECT_SLUG != ''
+        id: presign
+        uses: actions/upload-artifact@v7
+        with:
+          name: win-unsigned-${{ github.run_id }}
+          path: artifacts/*.zip
+          retention-days: 1
+
+      - name: Sign Windows binaries via SignPath
+        if: runner.os == 'Windows' && vars.SIGNPATH_PROJECT_SLUG != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.presign.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: artifacts   # signed zip(s) overwrite the unsigned ones in place
+
       # Cryptographically attests that these exact archives were built by this workflow from this commit
       # (Sigstore-backed, free). Consumers verify with:
       #   gh attestation verify <file> --repo ${{ github.repository }}
