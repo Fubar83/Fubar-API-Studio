@@ -36,7 +36,7 @@ jobs:
           # Empty on workflow_dispatch (script falls back to 1.0.0); the tag name (e.g. v1.2.3) otherwise.
           VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: fubar-${{ matrix.os }}
           path: |
