@@ -109,6 +109,10 @@ public partial class RequestAuthViewModel : ViewModelBase
     [ObservableProperty]
     public partial string? TestStatus { get; set; }
 
+    /// <summary>The complete token-endpoint response (HTTP status + body) from the last Test, for verification.</summary>
+    [ObservableProperty]
+    public partial string? TestResult { get; set; }
+
     [ObservableProperty]
     public partial string? RequestPreview { get; set; }
 
@@ -121,8 +125,10 @@ public partial class RequestAuthViewModel : ViewModelBase
         }
 
         TestStatus = "Requesting token...";
+        TestResult = null;
         var outcome = await TestAuthHandler(ToModel());
         TestStatus = outcome.Message;
+        TestResult = outcome.Details;
     }
 
     [RelayCommand]

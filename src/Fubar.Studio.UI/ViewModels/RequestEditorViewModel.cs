@@ -147,7 +147,7 @@ public partial class RequestEditorViewModel : ViewModelBase, IDisposable
 
         // The Auth tab's Test button acquires an OAuth token via the provider against the live
         // workspace/environment, storing it in session variables; Verify previews the request.
-        Auth.TestAuthHandler = config => _authProvider.EnsureAsync(config, _workspace, _environmentManager.ActiveEnvironment);
+        Auth.TestAuthHandler = config => _authProvider.EnsureAsync(config, _workspace, _environmentManager.ActiveEnvironment, forceRefresh: true);
         Auth.PreviewHandler = config => _authProvider.PreviewTokenRequest(config, _workspace, _environmentManager.ActiveEnvironment);
 
         // The active environment/secrets-reveal choice can change while this request stays open -

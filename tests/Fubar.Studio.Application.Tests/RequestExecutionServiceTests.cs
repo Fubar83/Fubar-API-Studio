@@ -81,7 +81,7 @@ public class RequestExecutionServiceTests
     {
         public int EnsureCount { get; private set; }
 
-        public Task<AuthOutcome> EnsureAsync(AuthConfig auth, Workspace workspace, WorkspaceEnvironment? env, CancellationToken ct = default)
+        public Task<AuthOutcome> EnsureAsync(AuthConfig auth, Workspace workspace, WorkspaceEnvironment? env, CancellationToken ct = default, bool forceRefresh = false)
         {
             EnsureCount++;
             return Task.FromResult(new AuthOutcome(true, ""));

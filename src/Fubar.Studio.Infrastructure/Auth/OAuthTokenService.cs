@@ -44,20 +44,31 @@ public sealed class OAuthTokenService : IOAuthTokenService
 
         var client = _httpClientFactory.CreateClient();
         using var response = await client.SendAsync(httpRequest, cancellationToken);
+        var status = (int)response.StatusCode;
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException($"Token endpoint returned {(int)response.StatusCode}: {Truncate(body)}");
+            throw new OAuthTokenException($"Token endpoint returned HTTP {status}.", status, body);
         }
 
-        if (JsonNode.Parse(body) is not JsonObject json)
+        JsonObject? json;
+        try
         {
-            throw new InvalidOperationException("Token endpoint did not return a JSON object.");
+            json = JsonNode.Parse(body) as JsonObject;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            json = null;
+        }
+
+        if (json is null)
+        {
+            throw new OAuthTokenException("Token endpoint did not return a JSON object.", status, body);
         }
 
         var accessToken = json["access_token"]?.GetValue<string>()
-            ?? throw new InvalidOperationException("Token response had no access_token.");
+            ?? throw new OAuthTokenException("Token response had no access_token.", status, body);
 
         DateTimeOffset? expiresAt = null;
         if (json["expires_in"] is JsonValue expiresIn && TryGetSeconds(expiresIn, out var seconds))
@@ -66,7 +77,7 @@ public sealed class OAuthTokenService : IOAuthTokenService
         }
 
         var refreshToken = json["refresh_token"]?.GetValue<string>();
-        return new OAuthTokenResult(accessToken, expiresAt, refreshToken);
+        return new OAuthTokenResult(accessToken, expiresAt, refreshToken, status, body);
     }
 
     // The form fields + (when using Basic-header auth) the base64 client credentials, shared by
@@ -142,6 +153,4 @@ public sealed class OAuthTokenService : IOAuthTokenService
 
         return value.TryGetValue<string>(out var text) && long.TryParse(text, out seconds);
     }
-
-    private static string Truncate(string body) => body.Length <= 300 ? body : body[..300] + "…";
 }
