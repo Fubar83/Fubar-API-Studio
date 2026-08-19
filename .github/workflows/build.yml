@@ -1,0 +1,60 @@
+name: build
+
+# Builds self-contained, cross-platform binaries. Each OS is built on its NATIVE runner so packaging is
+# correct (macOS .app keeps its executable bit / symlinks; Linux tar keeps +x). Runs on demand and on
+# version tags; a tag also publishes a GitHub Release with every artifact attached.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rids: win-x64,win-arm64
+          - os: ubuntu-latest
+            rids: linux-x64,linux-arm64
+          - os: macos-latest
+            rids: osx-arm64,osx-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish + package
+        shell: pwsh
+        run: ./build/publish.ps1 -Runtimes ($env:RIDS -split ',') -Version "$env:VERSION"
+        env:
+          RIDS: ${{ matrix.rids }}
+          # Empty on workflow_dispatch (script falls back to 1.0.0); the tag name (e.g. v1.2.3) otherwise.
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fubar-${{ matrix.os }}
+          path: |
+            artifacts/*.zip
+            artifacts/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
+          generate_release_notes: true

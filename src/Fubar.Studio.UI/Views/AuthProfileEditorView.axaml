@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Fubar.Studio.UI.ViewModels"
+             xmlns:avc="using:Avalonia.Data.Converters"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
+             x:Class="Fubar.Studio.UI.Views.AuthProfileEditorView"
+             x:DataType="vm:AuthProfileEditorViewModel"
+             Background="{DynamicResource BgEditorCanvas}">
+
+    <!-- Opened in the main canvas when a Left Pane "Auth Profiles" row is clicked for editing
+         (LeftPane.md §4.1). A profile is always one concrete scheme - unlike the Request Editor's
+         Auth tab, there's no Inherit/None/Profile selector here. -->
+    <StackPanel Margin="20,16" Spacing="12" MaxWidth="480" HorizontalAlignment="Left">
+
+        <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="Auth Profile" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" />
+            <TextBox Text="{Binding Name}" Width="260" FontWeight="Bold" FontSize="14" />
+            <Button Content="Save" Classes="primary-btn" Command="{Binding SaveCommand}" />
+        </StackPanel>
+
+        <ComboBox ItemsSource="{Binding TypeOptions}"
+                  SelectedItem="{Binding Type}"
+                  HorizontalAlignment="Left"
+                  MinWidth="180" />
+
+        <TextBox Text="{Binding Token}" PlaceholderText="Bearer token" IsVisible="{Binding IsBearerVisible}" HorizontalAlignment="Stretch" />
+
+        <StackPanel IsVisible="{Binding IsApiKeyVisible}" Spacing="8">
+            <TextBox Text="{Binding ApiKeyName}" PlaceholderText="Key name" />
+            <TextBox Text="{Binding ApiKeyValue}" PlaceholderText="Key value" PasswordChar="*" />
+            <ComboBox ItemsSource="{Binding ApiKeyLocationOptions}" SelectedItem="{Binding ApiKeyLocation}" HorizontalAlignment="Left" />
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding IsBasicVisible}" Spacing="8">
+            <TextBox Text="{Binding Username}" PlaceholderText="Username" />
+            <TextBox Text="{Binding Password}" PlaceholderText="Password" PasswordChar="*" />
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding IsOAuth2Visible}" Spacing="8">
+            <TextBlock Text="Grant type" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+            <ComboBox ItemsSource="{Binding OAuth2GrantOptions}" SelectedItem="{Binding OAuth2Grant}" HorizontalAlignment="Left" MinWidth="200" />
+
+            <TextBox Text="{Binding TokenUrl}" PlaceholderText="Token URL (e.g. https://auth.example.com/oauth/token)" />
+            <TextBox Text="{Binding ClientId}" PlaceholderText="Client ID" />
+            <TextBox Text="{Binding ClientSecret}" PlaceholderText="Client secret" PasswordChar="*" />
+            <TextBox Text="{Binding Scopes}" PlaceholderText="Scopes (space-separated, optional)" />
+            <TextBox Text="{Binding RefreshToken}" PlaceholderText="Refresh token" IsVisible="{Binding IsRefreshGrant}" />
+
+            <TextBlock Text="Send client credentials as" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,0" />
+            <ComboBox ItemsSource="{Binding OAuth2ClientAuthOptions}" SelectedItem="{Binding ClientAuthentication}" HorizontalAlignment="Left" MinWidth="200" />
+
+            <Expander Header="Token variables (session-only, not saved to disk)">
+                <StackPanel Spacing="6" Margin="0,6,0,0">
+                    <TextBox Text="{Binding AccessTokenVariable}" PlaceholderText="Access token variable (default: oauth2_access_token)" />
+                    <TextBox Text="{Binding ExpiryVariable}" PlaceholderText="Expiry variable (default: oauth2_expires_at)" />
+                </StackPanel>
+            </Expander>
+
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
+                <Button Classes="secondary-btn" Content="Verify request" ToolTip.Tip="Preview the token request (no call)" Command="{Binding VerifyRequestCommand}" />
+                <Button Classes="secondary-btn" Content="Test / Get token" Command="{Binding TestAuthCommand}" />
+                <TextBlock Text="{Binding TestStatus}" VerticalAlignment="Center" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondary}" FontSize="12" />
+            </StackPanel>
+
+            <Border IsVisible="{Binding RequestPreview, Converter={x:Static avc:StringConverters.IsNotNullOrEmpty}}"
+                    Background="{DynamicResource BgHeader}" BorderBrush="{DynamicResource BorderSubtle}"
+                    BorderThickness="1" CornerRadius="6" Padding="10">
+                <SelectableTextBlock Text="{Binding RequestPreview}" FontFamily="Cascadia Code,Consolas,monospace"
+                                     FontSize="12" Foreground="{DynamicResource TextPrimary}" />
+            </Border>
+        </StackPanel>
+
+    </StackPanel>
+
+</UserControl>
