@@ -58,6 +58,8 @@ public class OAuthTests
         Assert.Equal("abc", result.AccessToken);
         Assert.Equal("r1", result.RefreshToken);
         Assert.NotNull(result.ExpiresAt);
+        Assert.Equal(200, result.StatusCode);
+        Assert.Contains("access_token", result.RawResponse); // complete response captured for verification
         Assert.Contains("grant_type=client_credentials", handler.LastBody);
         Assert.Contains("client_id=cid", handler.LastBody);
         Assert.Contains("scope=read", handler.LastBody);
@@ -95,8 +97,10 @@ public class OAuthTests
         var handler = new StubHandler { Status = HttpStatusCode.BadRequest, ResponseBody = """{ "error": "invalid_client" }""" };
         var service = new OAuthTokenService(new StubHttpClientFactory(handler));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.AcquireAsync(
+        var ex = await Assert.ThrowsAsync<OAuthTokenException>(() => service.AcquireAsync(
             new OAuth2TokenRequest(OAuth2GrantType.ClientCredentials, "https://auth/token", "cid", "bad", null, null, OAuth2ClientAuth.Body)));
+        Assert.Equal(400, ex.StatusCode);
+        Assert.Contains("invalid_client", ex.RawResponse); // full error body preserved for the Test result
     }
 
     private sealed class CountingTokenService : IOAuthTokenService
@@ -128,6 +132,38 @@ public class OAuthTests
         Assert.True(outcome.Ok);
         Assert.Equal("token", session.Get("ws1", AuthDefaults.AccessTokenVariable));
         Assert.False(string.IsNullOrEmpty(session.Get("ws1", AuthDefaults.ExpiryVariable)));
+    }
+
+    [Fact]
+    public async Task Provider_SurfacesCompleteResponseInDetails()
+    {
+        var session = new SessionVariableStore();
+        var token = new CountingTokenService
+        {
+            Result = new("token", DateTimeOffset.UtcNow.AddHours(1), null, 200, """{ "access_token": "token", "token_type": "Bearer" }"""),
+        };
+        var provider = MakeProvider(token, session);
+        var auth = new AuthConfig { Type = AuthType.OAuth2, TokenUrl = "https://auth/token", ClientId = "c" };
+
+        var outcome = await provider.EnsureAsync(auth, Workspace, null);
+
+        Assert.NotNull(outcome.Details);
+        Assert.Contains("HTTP 200", outcome.Details);
+        Assert.Contains("token_type", outcome.Details);
+    }
+
+    [Fact]
+    public async Task Provider_ForceRefresh_BypassesCachedToken()
+    {
+        var session = new SessionVariableStore();
+        var token = new CountingTokenService();
+        var provider = MakeProvider(token, session);
+        var auth = new AuthConfig { Type = AuthType.OAuth2, TokenUrl = "https://auth/token", ClientId = "c" };
+
+        await provider.EnsureAsync(auth, Workspace, null);                     // acquires (Calls = 1)
+        await provider.EnsureAsync(auth, Workspace, null, forceRefresh: true); // ignores cache (Calls = 2)
+
+        Assert.Equal(2, token.Calls);
     }
 
     [Fact]

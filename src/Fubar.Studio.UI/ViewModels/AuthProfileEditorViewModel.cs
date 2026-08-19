@@ -138,6 +138,10 @@ public partial class AuthProfileEditorViewModel : ViewModelBase
     [ObservableProperty]
     public partial string? TestStatus { get; set; }
 
+    /// <summary>The complete token-endpoint response (HTTP status + body) from the last Test, for verification.</summary>
+    [ObservableProperty]
+    public partial string? TestResult { get; set; }
+
     [ObservableProperty]
     public partial string? RequestPreview { get; set; }
 
@@ -145,8 +149,10 @@ public partial class AuthProfileEditorViewModel : ViewModelBase
     private async Task TestAuthAsync()
     {
         TestStatus = "Requesting token...";
-        var outcome = await _authProvider.EnsureAsync(BuildConfig(), _workspace, activeEnvironment: null);
+        TestResult = null;
+        var outcome = await _authProvider.EnsureAsync(BuildConfig(), _workspace, activeEnvironment: null, forceRefresh: true);
         TestStatus = outcome.Message;
+        TestResult = outcome.Details;
     }
 
     [RelayCommand]

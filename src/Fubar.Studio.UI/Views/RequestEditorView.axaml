@@ -300,6 +300,19 @@
                             <SelectableTextBlock Text="{Binding RequestPreview}" FontFamily="Cascadia Code,Consolas,monospace"
                                                  FontSize="12" Foreground="{DynamicResource TextPrimary}" />
                         </Border>
+
+                        <!-- Complete token-endpoint response from the last Test (status + body), for verification. -->
+                        <StackPanel Spacing="4" Margin="0,4,0,0"
+                                    IsVisible="{Binding TestResult, Converter={x:Static avc:StringConverters.IsNotNullOrEmpty}}">
+                            <TextBlock Text="Token response" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                            <Border Background="{DynamicResource BgHeader}" BorderBrush="{DynamicResource BorderSubtle}"
+                                    BorderThickness="1" CornerRadius="6" Padding="10">
+                                <ScrollViewer MaxHeight="240" HorizontalScrollBarVisibility="Auto">
+                                    <SelectableTextBlock Text="{Binding TestResult}" FontFamily="Cascadia Code,Consolas,monospace"
+                                                         FontSize="12" Foreground="{DynamicResource TextPrimary}" />
+                                </ScrollViewer>
+                            </Border>
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
             </TabItem>

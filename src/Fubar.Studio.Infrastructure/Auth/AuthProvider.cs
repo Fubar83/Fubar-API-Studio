@@ -28,7 +28,7 @@ public sealed class AuthProvider : IAuthProvider
         _session = session;
     }
 
-    public async Task<AuthOutcome> EnsureAsync(AuthConfig auth, Workspace workspace, WorkspaceEnvironment? activeEnvironment, CancellationToken cancellationToken = default)
+    public async Task<AuthOutcome> EnsureAsync(AuthConfig auth, Workspace workspace, WorkspaceEnvironment? activeEnvironment, CancellationToken cancellationToken = default, bool forceRefresh = false)
     {
         if (auth.Type != AuthType.OAuth2)
         {
@@ -41,7 +41,7 @@ public sealed class AuthProvider : IAuthProvider
 
         // Reuse a cached, still-valid token.
         var cachedToken = _session.Get(workspace.WorkspaceId, tokenVariable);
-        if (!string.IsNullOrEmpty(cachedToken) && !IsExpired(_session.Get(workspace.WorkspaceId, expiryVariable)))
+        if (!forceRefresh && !string.IsNullOrEmpty(cachedToken) && !IsExpired(_session.Get(workspace.WorkspaceId, expiryVariable)))
         {
             return new AuthOutcome(true, "Using the cached token (still valid).");
         }
@@ -82,13 +82,25 @@ public sealed class AuthProvider : IAuthProvider
             var expiryText = result.ExpiresAt is { } expiresAt
                 ? $"expires {expiresAt.UtcDateTime:yyyy-MM-dd HH:mm}Z"
                 : "no expiry reported";
-            return new AuthOutcome(true, $"Token acquired into {{{{{tokenVariable}}}}} ({expiryText}).");
+            return new AuthOutcome(true, $"Token acquired into {{{{{tokenVariable}}}}} ({expiryText}).",
+                FormatResponse(result.StatusCode, result.RawResponse));
+        }
+        catch (OAuthTokenException ex)
+        {
+            // The endpoint replied but rejected the request - show the complete response so the user can
+            // read the error (e.g. invalid_client, invalid_scope).
+            return new AuthOutcome(false, $"OAuth2 token request failed: {ex.Message}",
+                FormatResponse(ex.StatusCode, ex.RawResponse));
         }
         catch (Exception ex)
         {
-            return new AuthOutcome(false, $"OAuth2 token request failed: {ex.Message}");
+            // No HTTP exchange (DNS/timeout/etc.) - there's no response body to show.
+            return new AuthOutcome(false, $"OAuth2 token request failed: {ex.Message}", ex.Message);
         }
     }
+
+    private static string FormatResponse(int statusCode, string body) =>
+        string.IsNullOrEmpty(body) ? $"HTTP {statusCode}" : $"HTTP {statusCode}\n\n{body}";
 
     public string PreviewTokenRequest(AuthConfig auth, Workspace workspace, WorkspaceEnvironment? activeEnvironment)
     {
