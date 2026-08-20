@@ -1,0 +1,55 @@
+using Fubar.Studio.Application.Requests;
+using Fubar.Studio.Core.Models;
+using Fubar.Studio.Core.Secrets;
+using Fubar.Studio.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Fubar.Studio.EndToEnd.Tests;
+
+/// <summary>
+/// Shared harness for the live <c>httpbin.org</c> end-to-end auth tests. They exercise the REAL send
+/// pipeline (auth prestep → HTTP executor → captures) to prove that auth actually reaches the wire - the
+/// redesign's headline - and that cookies are isolated per environment. They double as runnable examples
+/// of how each auth mode behaves.
+/// <para>Opt-in (they need network and hit a public service): they self-skip unless <c>FUBAR_E2E=1</c>,
+/// so CI stays offline and deterministic. Run locally with:
+/// <c>FUBAR_E2E=1 dotnet test tests/Fubar.Studio.EndToEnd.Tests</c>.</para>
+/// </summary>
+public static class HttpBin
+{
+    public const string BaseUrl = "https://httpbin.org";
+
+    /// <summary>Skips the calling test unless live e2e is explicitly enabled via <c>FUBAR_E2E=1</c>.</summary>
+    public static void RequireLive() =>
+        Assert.SkipUnless(
+            Environment.GetEnvironmentVariable("FUBAR_E2E") == "1",
+            "Live httpbin e2e tests are opt-in. Set FUBAR_E2E=1 to run them.");
+
+    /// <summary>A real, DI-wired execution pipeline (no OS keyring, no history writes). Reuse a single
+    /// instance across requests that must share cookie jars (see the cookie-isolation test).</summary>
+    public static (IRequestExecutionService Exec, Workspace Workspace) Pipeline()
+    {
+        var services = new ServiceCollection();
+        services.AddFubarInfrastructure();
+        services.AddSingleton<IRequestExecutionService, RequestExecutionService>();
+        // Last registration wins - keep the OS keyring out of tests.
+        services.AddSingleton<ISecretStoreService, NoSecretStore>();
+        var provider = services.BuildServiceProvider();
+
+        var workspace = new Workspace
+        {
+            RootPath = Path.Combine(Path.GetTempPath(), "fubar-e2e"),
+            Manifest = new AppManifest { Id = "e2e", Name = "E2E" },
+        };
+        return (provider.GetRequiredService<IRequestExecutionService>(), workspace);
+    }
+
+    public static RequestModel Get(string url) => new() { Name = "e2e", Method = "GET", Url = url };
+
+    private sealed class NoSecretStore : ISecretStoreService
+    {
+        public string? TryGetSecret(string workspaceId, string key) => null;
+        public void SetSecret(string workspaceId, string key, string value) { }
+        public void DeleteSecret(string workspaceId, string key) { }
+    }
+}
