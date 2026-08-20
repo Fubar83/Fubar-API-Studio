@@ -39,6 +39,24 @@ docker compose -f tests/Fubar.Studio.EndToEnd.Tests/docker-compose.yml down
 Two httpbin containers are started; the second (a different port = a different origin) backs the
 cross-origin redirect tests.
 
+### Without the compose plugin (plain `podman run` / `docker run`)
+
+If you don't have the `compose` subcommand, start the two containers directly (works the same):
+
+```
+podman run -d --rm -p 8080:80 --name hb1 kennethreitz/httpbin
+podman run -d --rm -p 8081:80 --name hb2 kennethreitz/httpbin
+
+FUBAR_E2E=1 \
+  FUBAR_E2E_BASEURL=http://localhost:8080 \
+  FUBAR_E2E_OTHERHOST=http://localhost:8081/get \
+  dotnet test tests/Fubar.Studio.EndToEnd.Tests
+
+podman rm -f hb1 hb2
+```
+
+(Swap `podman` for `docker` if you use Docker.)
+
 ## Configuration
 
 | Env var | Default | Purpose |
