@@ -18,11 +18,16 @@ namespace Fubar.Studio.EndToEnd.Tests;
 /// </summary>
 public static class HttpBin
 {
-    public const string BaseUrl = "https://httpbin.org";
+    /// <summary>The httpbin-compatible base URL. Defaults to the public service; override with
+    /// <c>FUBAR_E2E_BASEURL</c> to point at a local Docker httpbin (see the project README).</summary>
+    public static string BaseUrl { get; } =
+        (Environment.GetEnvironmentVariable("FUBAR_E2E_BASEURL") ?? "https://httpbin.org").TrimEnd('/');
 
-    /// <summary>A second, different-origin echo service - used to prove credentials are not forwarded
-    /// across a real cross-host redirect.</summary>
-    public const string OtherHostEcho = "https://postman-echo.com/get";
+    /// <summary>A second, DIFFERENT-origin echo endpoint - used to prove credentials are not forwarded
+    /// across a real cross-host redirect. Override with <c>FUBAR_E2E_OTHERHOST</c> (e.g. a second local
+    /// Docker httpbin on another port, which is a different origin).</summary>
+    public static string OtherHostEcho { get; } =
+        Environment.GetEnvironmentVariable("FUBAR_E2E_OTHERHOST") ?? "https://postman-echo.com/get";
 
     /// <summary>Skips the calling test unless live e2e is explicitly enabled via <c>FUBAR_E2E=1</c>.</summary>
     public static void RequireLive() =>
