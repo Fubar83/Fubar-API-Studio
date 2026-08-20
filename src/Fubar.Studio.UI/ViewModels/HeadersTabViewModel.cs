@@ -114,10 +114,11 @@ public partial class HeadersTabViewModel : ViewModelBase
             .Select(r => new KeyValueItem { Key = r.Key, Value = r.Value, Enabled = r.Enabled })
             .ToList();
 
-    /// <summary>Every header that will actually be sent - direct, folder-inherited, and auth-derived -
-    /// that is currently enabled. Used to render a faithful "Copy as cURL".</summary>
-    public List<KeyValueItem> AllEnabledToModel() =>
-        Rows.Where(r => r.Enabled && !string.IsNullOrWhiteSpace(r.Key))
+    /// <summary>Headers to actually send: enabled <b>direct + folder-inherited</b> rows. Auth-derived rows
+    /// are excluded - the execution pipeline's auth prestep injects the resolved credential itself (the
+    /// auth-derived rows here are a read-only preview). Used by the Send path.</summary>
+    public List<KeyValueItem> SendableToModel() =>
+        Rows.Where(r => r.Enabled && !r.IsAuthDerived && !string.IsNullOrWhiteSpace(r.Key))
             .Select(r => new KeyValueItem { Key = r.Key, Value = r.Value, Enabled = true })
             .ToList();
 

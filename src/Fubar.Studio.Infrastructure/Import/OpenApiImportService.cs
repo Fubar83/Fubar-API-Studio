@@ -352,16 +352,16 @@ public sealed partial class OpenApiImportService : IOpenApiImportService
             {
                 var existingVar = existingVars.FirstOrDefault(v => string.Equals(v.Key, variable.Key, StringComparison.Ordinal));
                 var change = existingVar is null ? ImportChange.Add
-                    : (existingVar.Value ?? "") == (variable.Value ?? "") && existingVar.IsSecret == variable.IsSecret ? ImportChange.Unchanged
+                    : (existingVar.Value ?? "") == (variable.Value ?? "") && existingVar.Kind == variable.Kind ? ImportChange.Unchanged
                     : ImportChange.Update;
-                variableDiffs.Add(new VariableDiff(change, env.Name, variable.Key, variable.Value, existingVar?.Value, variable.IsSecret));
+                variableDiffs.Add(new VariableDiff(change, env.Name, variable.Key, variable.Value, existingVar?.Value, variable.Kind == VariableKind.Secret));
             }
 
             if (existingEnv is not null)
             {
                 foreach (var orphan in existingEnv.Variables.Where(v => env.Variables.All(pv => pv.Key != v.Key)))
                 {
-                    variableDiffs.Add(new VariableDiff(ImportChange.Remove, env.Name, orphan.Key, null, orphan.Value, orphan.IsSecret));
+                    variableDiffs.Add(new VariableDiff(ImportChange.Remove, env.Name, orphan.Key, null, orphan.Value, orphan.Kind == VariableKind.Secret));
                 }
             }
         }
@@ -462,7 +462,7 @@ public sealed partial class OpenApiImportService : IOpenApiImportService
                 }
 
                 var description = planEnv?.Variables.FirstOrDefault(v => v.Key == diff.Key)?.Description;
-                var variable = new AppVariable { Key = diff.Key, Value = diff.NewValue ?? "", IsSecret = diff.IsSecret, Description = description };
+                var variable = new AppVariable { Key = diff.Key, Value = diff.NewValue ?? "", Kind = diff.IsSecret ? VariableKind.Secret : VariableKind.Normal, Description = description };
                 if (index >= 0)
                 {
                     env.Variables[index] = variable;
@@ -997,7 +997,7 @@ public sealed partial class OpenApiImportService : IOpenApiImportService
     private static WorkspaceEnvironment MakeEnvironment(string name, string baseUrl, List<AppVariable> commonVars)
     {
         var variables = new List<AppVariable> { new() { Key = "baseUrl", Value = baseUrl, Description = "OpenAPI server URL" } };
-        variables.AddRange(commonVars.Select(v => new AppVariable { Key = v.Key, Value = v.Value, IsSecret = v.IsSecret, Description = v.Description }));
+        variables.AddRange(commonVars.Select(v => new AppVariable { Key = v.Key, Value = v.Value, Kind = v.Kind, Description = v.Description }));
         return new WorkspaceEnvironment { Name = name, Variables = variables };
     }
 
@@ -1308,7 +1308,7 @@ public sealed partial class OpenApiImportService : IOpenApiImportService
 
     private static string Pretty(JsonNode? node) => node?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? "{}";
 
-    private static AppVariable Secret(string key, string description) => new() { Key = key, Value = "", IsSecret = true, Description = description };
+    private static AppVariable Secret(string key, string description) => new() { Key = key, Value = "", Kind = VariableKind.Secret, Description = description };
 
     private static string Slug(string name) => new(name.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
 

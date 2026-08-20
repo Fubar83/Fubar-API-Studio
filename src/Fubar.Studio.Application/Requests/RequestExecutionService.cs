@@ -28,17 +28,34 @@ public sealed class RequestExecutionService : IRequestExecutionService
 
     public async Task<RequestRunResult> RunAsync(RequestRun run, CancellationToken cancellationToken = default)
     {
-        // 1. Ensure any dynamic auth (e.g. a fresh OAuth token in session variables) before the request's
-        //    Authorization header (which references {{token}}) is resolved and sent.
+        var context = new RequestExecutionContext(run.Workspace, run.Environment);
+        var executor = _executorRegistry.Resolve(run.Request.Kind);
+
+        // 1. Auth prestep: acquire (OAuth2) + apply. The applied credential (headers/query) is injected into
+        //    a clone used only for execution, so resolved tokens never reach history.
         AuthOutcome? auth = null;
+        var requestToExecute = run.Request;
+        // Only OAuth2 has an "acquire" step worth re-running on a 401.
+        var hasAcquireStep = run.EffectiveAuth is { Type: AuthType.OAuth2 };
         if (run.EffectiveAuth is { } effectiveAuth)
         {
-            auth = await _authProvider.EnsureAsync(effectiveAuth, run.Workspace, run.Environment, cancellationToken);
+            var prep = await _authProvider.PrepareAsync(effectiveAuth, run.Workspace, run.Environment, forceReacquire: false, cancellationToken);
+            auth = prep.Outcome;
+            requestToExecute = AuthRequestMerge.Inject(run.Request, prep.Applied);
         }
 
         // 2. Execute via whichever protocol executor the request's kind resolves to.
-        var context = new RequestExecutionContext(run.Workspace, run.Environment);
-        var result = await _executorRegistry.Resolve(run.Request.Kind).ExecuteAsync(run.Request, context, cancellationToken);
+        var result = await executor.ExecuteAsync(requestToExecute, context, cancellationToken);
+
+        // 2b. Retry once on 401 for acquire-based schemes: force a re-acquire and resend (a stale/expired
+        //     token the cache still considered valid).
+        if (result.StatusCode == 401 && hasAcquireStep && run.EffectiveAuth is { } retryAuth)
+        {
+            var prep = await _authProvider.PrepareAsync(retryAuth, run.Workspace, run.Environment, forceReacquire: true, cancellationToken);
+            auth = prep.Outcome;
+            var retried = AuthRequestMerge.Inject(run.Request, prep.Applied);
+            result = await executor.ExecuteAsync(retried, context, cancellationToken);
+        }
 
         // 3. On a real response (not a transport error), apply captures then evaluate assertions.
         IReadOnlyList<CaptureResult> captures = [];

@@ -70,7 +70,7 @@ public sealed class ResponseTestService : IResponseTestService
 
             if (c.Scope == CaptureScope.Session)
             {
-                _sessionStore.Set(workspace.WorkspaceId, name, value);
+                _sessionStore.Set(SessionScope.For(workspace, activeEnvironment), name, value);
                 results.Add(new CaptureResult(true, name, value, "session", null));
             }
             else if (activeEnvironment is null)

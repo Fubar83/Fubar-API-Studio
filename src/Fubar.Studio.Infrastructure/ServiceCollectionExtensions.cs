@@ -52,17 +52,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IJsonSchemaValidator, JsonSchemaValidator>();
         services.AddSingleton<IJsonPathEvaluator, JsonPathEvaluator>();
 
-        // A process-wide cookie jar shared by the named HTTP client, so Set-Cookie from one request is
-        // replayed on the next (session cookies for login-then-call flows).
-        services.AddSingleton<System.Net.CookieContainer>();
-        services.AddHttpClient(); // default client (used by e.g. the OAuth token service)
-        services.AddHttpClient(HttpRequestExecutor.HttpClientName)
-            .ConfigurePrimaryHttpMessageHandler(sp => new HttpClientHandler
-            {
-                UseCookies = true,
-                CookieContainer = sp.GetRequiredService<System.Net.CookieContainer>(),
-                AllowAutoRedirect = true,
-            });
+        services.AddHttpClient(); // default client (used by e.g. the OAuth token service and importers)
+
+        // Per-(workspace,environment) HTTP clients, each with its own cookie jar, so session cookies from
+        // one environment are never replayed against another (login-then-call flows stay isolated).
+        services.AddSingleton<IScopedHttpClientProvider, ScopedHttpClientProvider>();
 
         services.AddSingleton<IProtocolProvider, HttpProtocolProvider>();
         services.AddSingleton<IProtocolRegistry, ProtocolRegistry>();

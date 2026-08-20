@@ -88,4 +88,21 @@ public sealed class AuthConfig
     /// <summary>Name of the session variable holding the token's expiry (unix seconds). Defaults to
     /// <c>oauth2_expires_at</c>.</summary>
     public string? ExpiryVariable { get; set; }
+
+    // Template-based OAuth2 (the request-builder-style editor). When these are present the auth provider
+    // runs the editable token request + captures instead of the legacy fixed-form path. All additive and
+    // defaulted so existing configs (TokenRequest == null) keep routing to the legacy engine.
+
+    /// <summary>The editable token/login request (method/URL/headers/body), seeded from an
+    /// <c>AuthTemplate</c>. <c>null</c> ⇒ use the legacy fixed-form OAuth2 path built by the token service.</summary>
+    public AuthTokenRequest? TokenRequest { get; set; }
+
+    /// <summary>JSONPath → variable rules applied to the token response on success (and cleared on
+    /// failure). The provider forces these to <see cref="CaptureScope.Session"/>; the rule writing
+    /// <see cref="AccessTokenVariable"/> is the token the <c>Authorization: Bearer</c> header references.</summary>
+    public List<CaptureRule> TokenCaptures { get; set; } = [];
+
+    /// <summary>JSONPath to the relative <c>expires_in</c> seconds in the token response, used only to
+    /// compute <see cref="ExpiryVariable"/> for caching. Kept out of the user captures grid.</summary>
+    public string? ExpiresInExpression { get; set; }
 }

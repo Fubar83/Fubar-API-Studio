@@ -15,15 +15,16 @@ public class FubarJsonSerializationTests
             Name = "Demo Workspace",
             Variables =
             [
-                new AppVariable { Key = "baseUrl", Value = "https://example.com", IsSecret = false, Description = "API base" },
-                new AppVariable { Key = "apiKey", Value = null, IsSecret = true },
+                new AppVariable { Key = "baseUrl", Value = "https://example.com", Kind = VariableKind.Normal, Description = "API base" },
+                new AppVariable { Key = "apiKey", Value = null, Kind = VariableKind.Secret },
             ],
         };
 
         var json = JsonSerializer.Serialize(manifest, FubarJson.Options);
 
         Assert.Contains("\"baseUrl\"", json);
-        Assert.Contains("\"isSecret\": true", json);
+        Assert.Contains("\"kind\": \"secret\"", json);
+        Assert.DoesNotContain("\"isSecret\"", json); // legacy flag is no longer written
         Assert.DoesNotContain("\"Name\"", json); // PascalCase must not leak through
 
         var roundTripped = JsonSerializer.Deserialize<AppManifest>(json, FubarJson.Options);
@@ -32,7 +33,7 @@ public class FubarJsonSerializationTests
         Assert.Equal(manifest.Id, roundTripped.Id);
         Assert.Equal(manifest.Name, roundTripped.Name);
         Assert.Equal(2, roundTripped.Variables.Count);
-        Assert.True(roundTripped.Variables[1].IsSecret);
+        Assert.Equal(VariableKind.Secret, roundTripped.Variables[1].Kind);
         Assert.Null(roundTripped.Variables[1].Value);
     }
 

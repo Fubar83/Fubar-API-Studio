@@ -24,11 +24,11 @@
                 BorderBrush="{DynamicResource BorderEditor}"
                 BorderThickness="0,0,0,1"
                 Padding="6,0,6,8">
-            <Grid ColumnDefinitions="2*,2*,2*,70,28">
+            <Grid ColumnDefinitions="2*,2*,2*,110,28">
                 <TextBlock Grid.Column="0" Text="KEY" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
                 <TextBlock Grid.Column="1" Text="VALUE" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
                 <TextBlock Grid.Column="2" Text="DESCRIPTION" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
-                <TextBlock Grid.Column="3" Text="SECRET" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                <TextBlock Grid.Column="3" Text="TYPE" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
             </Grid>
         </Border>
 
@@ -44,11 +44,16 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vm:EnvironmentVariableRowViewModel">
                         <Border BorderBrush="{DynamicResource BorderEditor}" BorderThickness="0,0,0,1" Padding="6,6">
-                            <Grid ColumnDefinitions="2*,2*,2*,70,28">
+                            <Grid ColumnDefinitions="2*,2*,2*,110,28">
                                 <TextBox Grid.Column="0" Text="{Binding Key}" PlaceholderText="Key" Margin="2,0" BorderThickness="0" Background="Transparent" />
-                                <TextBox Grid.Column="1" Text="{Binding Value}" PlaceholderText="Value" Margin="2,0" BorderThickness="0" Background="Transparent" PasswordChar="{Binding IsSecret, Converter={x:Static conv:SecretMaskConverter.Instance}}" />
+                                <TextBox Grid.Column="1" Text="{Binding Value}" PlaceholderText="Value" Margin="2,0" BorderThickness="0" Background="Transparent" PasswordChar="{Binding IsSecretKind, Converter={x:Static conv:SecretMaskConverter.Instance}}" />
                                 <TextBox Grid.Column="2" Text="{Binding Description}" PlaceholderText="Description" Margin="2,0" BorderThickness="0" Background="Transparent" />
-                                <CheckBox Grid.Column="3" IsChecked="{Binding IsSecret}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <ComboBox Grid.Column="3"
+                                          ItemsSource="{x:Static vm:EnvironmentVariableRowViewModel.KindOptions}"
+                                          SelectedItem="{Binding Kind}"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Center"
+                                          Margin="2,0" />
                                 <Button Grid.Column="4"
                                         Classes="icon-btn icon-btn-danger"
                                         Content="&#x2715;"

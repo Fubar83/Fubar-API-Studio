@@ -3,10 +3,14 @@ using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Fubar.Studio.Core.Variables;
 
 namespace Fubar.Studio.UI.Controls;
 
@@ -46,6 +50,25 @@ public static partial class VariableIntellisense
         {
             Focusable = false,
             Background = Brushes.Transparent,
+            // Show the variable name, and a muted "session" badge for session-only variables so they're
+            // visible in the list and distinguishable from environment variables.
+            ItemTemplate = new FuncDataTemplate<VariableSuggestion>((_, _) =>
+            {
+                var name = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+                name.Bind(TextBlock.TextProperty, new Binding(nameof(VariableSuggestion.Key)));
+
+                var badge = new TextBlock
+                {
+                    Text = "session",
+                    FontSize = 10,
+                    Margin = new Thickness(8, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                badge.Bind(Visual.IsVisibleProperty, new Binding(nameof(VariableSuggestion.IsSession)));
+                badge.Bind(TextBlock.ForegroundProperty, new DynamicResourceExtension("TextSecondary"));
+
+                return new StackPanel { Orientation = Orientation.Horizontal, Children = { name, badge } };
+            }, supportsRecycling: true),
         };
 
         var border = new Border
@@ -84,9 +107,9 @@ public static partial class VariableIntellisense
         box.LostFocus += (_, _) => popup.IsOpen = false;
         list.PointerReleased += (_, _) =>
         {
-            if (list.SelectedItem is string name)
+            if (list.SelectedItem is VariableSuggestion suggestion)
             {
-                Commit(box, name);
+                Commit(box, suggestion.Key);
             }
         };
     }
@@ -105,16 +128,17 @@ public static partial class VariableIntellisense
         var caret = Math.Clamp(box.CaretIndex, 0, text.Length);
         var prefix = TryGetPartialToken(text, caret);
 
-        if (context?.ActiveEnvironment is null || prefix is null)
+        if (context is null || prefix is null)
         {
             popup.IsOpen = false;
             return;
         }
 
-        var matches = context.ActiveEnvironment.Variables
-            .Select(v => v.Key)
-            .Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
+        // Environment variables + session variables (OAuth tokens, captured values). Works even with no
+        // active environment, since session variables can still exist.
+        var matches = context.Resolver.ListAvailable(context.Workspace, context.ActiveEnvironment)
+            .Where(s => s.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s.Key, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         if (matches.Count == 0)
@@ -200,9 +224,9 @@ public static partial class VariableIntellisense
                 break;
             case Key.Enter:
             case Key.Tab:
-                if (list.SelectedItem is string name)
+                if (list.SelectedItem is VariableSuggestion suggestion)
                 {
-                    Commit(box, name);
+                    Commit(box, suggestion.Key);
                     e.Handled = true;
                 }
                 break;

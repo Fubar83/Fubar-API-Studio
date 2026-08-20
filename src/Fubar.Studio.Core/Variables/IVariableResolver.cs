@@ -16,4 +16,13 @@ public interface IVariableResolver
 
     /// <summary>Substitutes every <c>{{key}}</c> token in <paramref name="input"/>; unresolved tokens are left as-is.</summary>
     string Substitute(string? input, Workspace workspace, WorkspaceEnvironment? activeEnvironment);
+
+    /// <summary>Every variable name available for a <c>{{key}}</c>: the active environment's variables plus
+    /// the session-only variables (OAuth tokens, captured values). Environment variables win on a name
+    /// clash. Used by the variable autocomplete/lists so session variables are visible too.</summary>
+    IReadOnlyList<VariableSuggestion> ListAvailable(Workspace workspace, WorkspaceEnvironment? activeEnvironment);
 }
+
+/// <summary>One selectable variable name and where it comes from - an environment (by name) or the
+/// in-memory session store. <see cref="IsSession"/> lets the UI mark session variables distinctly.</summary>
+public sealed record VariableSuggestion(string Key, string Source, bool IsSession);

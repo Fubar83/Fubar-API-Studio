@@ -8,27 +8,22 @@ namespace Fubar.Studio.Infrastructure.Protocols.Http;
 
 /// <summary>
 /// The first (and for now, only) registered <see cref="IRequestExecutor"/>: builds an
-/// <see cref="HttpRequestMessage"/> from a <see cref="RequestModel"/>, sends it via
-/// <see cref="IHttpClientFactory"/>, and measures timing/size. <c>{{key}}</c> tokens in the URL,
-/// headers, and body are substituted via <see cref="IVariableResolver"/> against the caller's
-/// <see cref="RequestExecutionContext"/> (active workspace + environment) - see
-/// RequestEditorPane.md §1.3, "Environment-Only Variables".
+/// <see cref="HttpRequestMessage"/> from a <see cref="RequestModel"/>, sends it via an
+/// <see cref="IScopedHttpClientProvider"/> client whose cookie jar is scoped per (workspace, environment),
+/// and measures timing/size. <c>{{key}}</c> tokens in the URL, headers, and body are substituted via
+/// <see cref="IVariableResolver"/> against the caller's <see cref="RequestExecutionContext"/> (active
+/// workspace + environment) - see RequestEditorPane.md §1.3, "Environment-Only Variables".
 /// </summary>
 public sealed class HttpRequestExecutor : IRequestExecutor
 {
-    /// <summary>Named <see cref="IHttpClientFactory"/> client configured (in DI) with a shared
-    /// <see cref="System.Net.CookieContainer"/>, so <c>Set-Cookie</c> from one request is sent on the
-    /// next - the session cookie jar an API client needs for login-then-call flows.</summary>
-    public const string HttpClientName = "fubar";
-
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(100);
 
-    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IScopedHttpClientProvider _scopedClients;
     private readonly IVariableResolver _variableResolver;
 
-    public HttpRequestExecutor(IHttpClientFactory httpClientFactory, IVariableResolver variableResolver)
+    public HttpRequestExecutor(IScopedHttpClientProvider scopedClients, IVariableResolver variableResolver)
     {
-        _httpClientFactory = httpClientFactory;
+        _scopedClients = scopedClients;
         _variableResolver = variableResolver;
     }
 
@@ -54,7 +49,8 @@ public sealed class HttpRequestExecutor : IRequestExecutor
 
             httpRequest.Content = await BuildContentAsync(request.Body, context, linked.Token);
 
-            var client = _httpClientFactory.CreateClient(HttpClientName);
+            // Cookies are isolated per (workspace, environment) - a DEV session cookie is never sent to PROD.
+            var client = _scopedClients.GetClient(SessionScope.For(context.Workspace, context.ActiveEnvironment));
             using var response = await client.SendAsync(httpRequest, linked.Token);
             var bodyBytes = await response.Content.ReadAsByteArrayAsync(linked.Token);
             var body = Encoding.UTF8.GetString(bodyBytes);
