@@ -3,7 +3,7 @@ using Avalonia.Data.Converters;
 
 namespace Fubar.Studio.UI.Converters;
 
-/// <summary>Maps <c>EnvironmentVariableRowViewModel.IsSecret</c> to a TextBox's <c>PasswordChar</c>
+/// <summary>Maps <c>EnvironmentVariableRowViewModel.IsSecretKind</c> to a TextBox's <c>PasswordChar</c>
 /// - masked while true, plain while false.</summary>
 public sealed class SecretMaskConverter : IValueConverter
 {

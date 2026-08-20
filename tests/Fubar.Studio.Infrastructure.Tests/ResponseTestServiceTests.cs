@@ -1,5 +1,6 @@
 using Fubar.Studio.Core.Models;
 using Fubar.Studio.Core.Protocols;
+using Fubar.Studio.Core.Variables;
 using Fubar.Studio.Infrastructure.Testing;
 using Fubar.Studio.Infrastructure.Variables;
 
@@ -58,7 +59,8 @@ public class ResponseTestServiceTests
         var results = await sut.ApplyCapturesAsync([capture], SampleResult(), workspace, activeEnvironment: null);
 
         Assert.True(Assert.Single(results).Ok);
-        Assert.True(sessionStore.TryGet(workspace.WorkspaceId, "userId", out var value));
+        // Session captures are written under the per-(workspace,environment) scope.
+        Assert.True(sessionStore.TryGet(SessionScope.For(workspace, (WorkspaceEnvironment?)null), "userId", out var value));
         Assert.Equal("42", value);
     }
 

@@ -102,11 +102,30 @@
                                      Background="{DynamicResource BgEditorCanvas}">
 
             <TabItem Header="Params">
-                <fc:KeyValueGrid DataContext="{Binding Params}"
-                                 ItemsSource="{Binding Rows}"
-                                 KeySuggestions="{Binding #Root.((vm:RequestEditorViewModel)DataContext).QueryParamSuggestions}"
-                                 AddCommand="{Binding AddRowCommand}"
-                                 RemoveCommand="{Binding RemoveRowCommand}" />
+                <DockPanel>
+                    <!-- Read-only auth placeholder (API-key-in-query): shows the query credential the auth
+                         prestep will inject, so the user can see auth will be applied. -->
+                    <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding AuthParams}" IsVisible="{Binding HasAuthParams}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:HeaderRowViewModel">
+                                <Border BorderBrush="{DynamicResource BorderEditor}" BorderThickness="0,0,0,1" Padding="6,6"
+                                        Background="{Binding IsInherited, Converter={x:Static conv:InheritedRowBackgroundConverter.Instance}}">
+                                    <Grid ColumnDefinitions="28,2*,3*,1.6*,28">
+                                        <CheckBox Grid.Column="0" IsChecked="{Binding Enabled}" IsEnabled="False" VerticalAlignment="Center" />
+                                        <SelectableTextBlock Grid.Column="1" Text="{Binding Key}" Margin="2,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <SelectableTextBlock Grid.Column="2" Text="{Binding Value}" Margin="2,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="3" Text="{Binding SourceName}" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <fc:KeyValueGrid DataContext="{Binding Params}"
+                                     ItemsSource="{Binding Rows}"
+                                     KeySuggestions="{Binding #Root.((vm:RequestEditorViewModel)DataContext).QueryParamSuggestions}"
+                                     AddCommand="{Binding AddRowCommand}"
+                                     RemoveCommand="{Binding RemoveRowCommand}" />
+                </DockPanel>
             </TabItem>
 
             <!-- Header &amp; Auth Inheritance (RequestEditorPane.md §5): inherited rows (folder
@@ -165,7 +184,7 @@
                                                                  Opacity="{Binding DisplayOpacity}"
                                                                  BorderThickness="0"
                                                                  Background="Transparent"
-                                                                 Watermark="Key"
+                                                                 PlaceholderText="Key"
                                                                  FilterMode="ContainsOrdinal"
                                                                  MinimumPrefixLength="0"
                                                                  MaxDropDownHeight="220"
@@ -256,51 +275,9 @@
                         </ComboBox>
                     </StackPanel>
 
-                    <StackPanel IsVisible="{Binding IsOAuth2Visible}" Spacing="8" MaxWidth="480" HorizontalAlignment="Left">
-                        <TextBlock Text="Grant type" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
-                        <ComboBox ItemsSource="{Binding OAuth2GrantOptions}" SelectedItem="{Binding OAuth2Grant}" HorizontalAlignment="Left" MinWidth="200" />
-
-                        <TextBox Text="{Binding TokenUrl}" PlaceholderText="Token URL (e.g. https://auth.example.com/oauth/token)"
-                                 controls:VariableTooltip.Context="{Binding #Root.((vm:RequestEditorViewModel)DataContext).VariableContext}"
-                                 controls:VariableIntellisense.Context="{Binding #Root.((vm:RequestEditorViewModel)DataContext).VariableContext}" />
-                        <TextBox Text="{Binding ClientId}" PlaceholderText="Client ID"
-                                 controls:VariableIntellisense.Context="{Binding #Root.((vm:RequestEditorViewModel)DataContext).VariableContext}" />
-                        <TextBox Text="{Binding ClientSecret}" PlaceholderText="Client secret" PasswordChar="*"
-                                 controls:VariableIntellisense.Context="{Binding #Root.((vm:RequestEditorViewModel)DataContext).VariableContext}" />
-                        <TextBox Text="{Binding Scopes}" PlaceholderText="Scopes (space-separated, optional)"
-                                 controls:VariableIntellisense.Context="{Binding #Root.((vm:RequestEditorViewModel)DataContext).VariableContext}" />
-
-                        <TextBox Text="{Binding RefreshToken}" PlaceholderText="Refresh token" IsVisible="{Binding IsRefreshGrant}"
-                                 controls:VariableIntellisense.Context="{Binding #Root.((vm:RequestEditorViewModel)DataContext).VariableContext}" />
-
-                        <TextBlock Text="Send client credentials as" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,0" />
-                        <ComboBox ItemsSource="{Binding OAuth2ClientAuthOptions}" SelectedItem="{Binding ClientAuthentication}" HorizontalAlignment="Left" MinWidth="200" />
-
-                        <Expander Header="Token variables (session-only, not saved)">
-                            <StackPanel Spacing="6" Margin="0,6,0,0">
-                                <TextBox Text="{Binding AccessTokenVariable}" PlaceholderText="Access token variable (default: oauth2_access_token)" />
-                                <TextBox Text="{Binding ExpiryVariable}" PlaceholderText="Expiry variable (default: oauth2_expires_at)" />
-                            </StackPanel>
-                        </Expander>
-
-                        <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
-                            <Button Classes="secondary-btn" Content="Verify request" ToolTip.Tip="Preview the token request (no call)" Command="{Binding VerifyRequestCommand}" />
-                            <Button Classes="secondary-btn" Content="Test / Get token" Command="{Binding TestAuthCommand}" />
-                            <TextBlock Text="{Binding TestStatus}"
-                                       IsVisible="{Binding TestStatus, Converter={x:Static avc:StringConverters.IsNotNullOrEmpty}}"
-                                       VerticalAlignment="Center"
-                                       TextWrapping="Wrap"
-                                       Foreground="{DynamicResource TextSecondary}"
-                                       FontSize="12" />
-                        </StackPanel>
-
-                        <Border IsVisible="{Binding RequestPreview, Converter={x:Static avc:StringConverters.IsNotNullOrEmpty}}"
-                                Background="{DynamicResource BgHeader}" BorderBrush="{DynamicResource BorderSubtle}"
-                                BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,4,0,0">
-                            <SelectableTextBlock Text="{Binding RequestPreview}" FontFamily="Cascadia Code,Consolas,monospace"
-                                                 FontSize="12" Foreground="{DynamicResource TextPrimary}" />
-                        </Border>
-                    </StackPanel>
+                    <ContentControl IsVisible="{Binding IsOAuth2Visible}">
+                        <views:TokenRequestEditorView DataContext="{Binding OAuth2}" />
+                    </ContentControl>
                 </StackPanel>
             </TabItem>
 

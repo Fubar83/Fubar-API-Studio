@@ -58,10 +58,49 @@ public class RequestExecutionServiceTests
         var sut = new RequestExecutionService(auth, new FakeExecutorRegistry(new ExecutionResult { StatusCode = 200 }), new FakeTestService(), new FakeHistoryService());
 
         await sut.RunAsync(new RequestRun(new RequestModel { Name = "r" }, Ws, null, EffectiveAuth: null));
-        Assert.Equal(0, auth.EnsureCount);
+        Assert.Equal(0, auth.PrepareCount);
 
         await sut.RunAsync(new RequestRun(new RequestModel { Name = "r" }, Ws, null, new AuthConfig { Type = AuthType.Bearer }));
-        Assert.Equal(1, auth.EnsureCount);
+        Assert.Equal(1, auth.PrepareCount);
+    }
+
+    [Fact]
+    public async Task Injects_applied_auth_into_the_executed_request()
+    {
+        var executor = new FakeExecutorRegistry(new ExecutionResult { StatusCode = 200 });
+        var auth = new FakeAuthProvider { Applied = new AppliedAuth([new KeyValueItem { Key = "Authorization", Value = "Bearer tok" }], []) };
+        var sut = new RequestExecutionService(auth, executor, new FakeTestService(), new FakeHistoryService());
+
+        await sut.RunAsync(new RequestRun(new RequestModel { Name = "r" }, Ws, null, new AuthConfig { Type = AuthType.Bearer }));
+
+        Assert.Contains(executor.LastRequest!.Headers, h => h.Key == "Authorization" && h.Value == "Bearer tok");
+    }
+
+    [Fact]
+    public async Task Retries_once_on_401_for_oauth2_forcing_a_reacquire()
+    {
+        var executor = new FakeExecutorRegistry(new ExecutionResult { StatusCode = 401 }, new ExecutionResult { StatusCode = 200 });
+        var auth = new FakeAuthProvider();
+        var sut = new RequestExecutionService(auth, executor, new FakeTestService(), new FakeHistoryService());
+
+        var result = await sut.RunAsync(new RequestRun(new RequestModel { Name = "r" }, Ws, null, new AuthConfig { Type = AuthType.OAuth2 }));
+
+        Assert.Equal(200, result.Result.StatusCode); // the retry succeeded
+        Assert.Equal(2, executor.Calls);
+        Assert.Equal(1, auth.ForceReacquireCount);
+    }
+
+    [Fact]
+    public async Task Does_not_retry_on_401_for_static_schemes()
+    {
+        var executor = new FakeExecutorRegistry(new ExecutionResult { StatusCode = 401 });
+        var auth = new FakeAuthProvider();
+        var sut = new RequestExecutionService(auth, executor, new FakeTestService(), new FakeHistoryService());
+
+        await sut.RunAsync(new RequestRun(new RequestModel { Name = "r" }, Ws, null, new AuthConfig { Type = AuthType.Bearer }));
+
+        Assert.Equal(1, executor.Calls); // no acquire step, so no retry
+        Assert.Equal(0, auth.ForceReacquireCount);
     }
 
     [Fact]
@@ -79,25 +118,47 @@ public class RequestExecutionServiceTests
 
     private sealed class FakeAuthProvider : IAuthProvider
     {
-        public int EnsureCount { get; private set; }
+        public int PrepareCount { get; private set; }
 
-        public Task<AuthOutcome> EnsureAsync(AuthConfig auth, Workspace workspace, WorkspaceEnvironment? env, CancellationToken ct = default)
+        public int ForceReacquireCount { get; private set; }
+
+        public AppliedAuth Applied { get; set; } = AppliedAuth.Empty;
+
+        public Task<AuthPreparation> PrepareAsync(AuthConfig auth, Workspace workspace, WorkspaceEnvironment? env, bool forceReacquire = false, CancellationToken ct = default)
         {
-            EnsureCount++;
-            return Task.FromResult(new AuthOutcome(true, ""));
+            PrepareCount++;
+            if (forceReacquire)
+            {
+                ForceReacquireCount++;
+            }
+
+            return Task.FromResult(new AuthPreparation(Applied, new AuthOutcome(true, "")));
         }
+
+        public AppliedAuth Apply(AuthConfig auth, Workspace workspace, WorkspaceEnvironment? env) => Applied;
 
         public string PreviewTokenRequest(AuthConfig auth, Workspace workspace, WorkspaceEnvironment? env) => "";
     }
 
-    private sealed class FakeExecutorRegistry(ExecutionResult result) : IExecutorRegistry, IRequestExecutor
+    private sealed class FakeExecutorRegistry(params ExecutionResult[] results) : IExecutorRegistry, IRequestExecutor
     {
+        private readonly Queue<ExecutionResult> _results = new(results);
+
+        public RequestModel? LastRequest { get; private set; }
+
+        public int Calls { get; private set; }
+
         public RequestKind Kind => RequestKind.Http;
 
         public IRequestExecutor Resolve(RequestKind kind) => this;
 
-        public Task<ExecutionResult> ExecuteAsync(RequestModel request, RequestExecutionContext context, CancellationToken ct = default) =>
-            Task.FromResult(result);
+        public Task<ExecutionResult> ExecuteAsync(RequestModel request, RequestExecutionContext context, CancellationToken ct = default)
+        {
+            Calls++;
+            LastRequest = request;
+            // Return each queued result in order, then keep returning the last one.
+            return Task.FromResult(_results.Count > 1 ? _results.Dequeue() : _results.Peek());
+        }
     }
 
     private sealed class FakeTestService : IResponseTestService

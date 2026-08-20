@@ -236,6 +236,29 @@ public class WorkspaceServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveEnvironmentAsync_OmitsValue_ForSecretAndSessionVariables_AndRoundTripsKind()
+    {
+        await _sut.SaveEnvironmentAsync(_root, new WorkspaceEnvironment
+        {
+            Name = "Staging",
+            Variables =
+            [
+                new AppVariable { Key = "apiKey", Value = null, Kind = VariableKind.Secret },
+                new AppVariable { Key = "runId", Value = null, Kind = VariableKind.Session },
+            ],
+        });
+
+        var environments = await _sut.LoadEnvironmentsAsync(_root);
+
+        var apiKey = environments[0].Variables.Single(v => v.Key == "apiKey");
+        var runId = environments[0].Variables.Single(v => v.Key == "runId");
+        Assert.Equal(VariableKind.Secret, apiKey.Kind);
+        Assert.Null(apiKey.Value);
+        Assert.Equal(VariableKind.Session, runId.Kind);
+        Assert.Null(runId.Value);
+    }
+
+    [Fact]
     public async Task SaveAuthProfilesAsync_ThenLoadAuthProfilesAsync_RoundTrips()
     {
         await _sut.SaveAuthProfilesAsync(_root, [new AuthProfile { Name = "Admin", Config = new AuthConfig { Type = AuthType.Bearer, Token = "abc" } }]);

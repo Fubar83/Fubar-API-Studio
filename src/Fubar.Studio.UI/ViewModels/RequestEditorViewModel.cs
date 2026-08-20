@@ -120,7 +120,8 @@ public partial class RequestEditorViewModel : ViewModelBase, IDisposable
         // the Body editor's schema validation.
         var bodySchema = request.Settings?["fubarOpenApi"]?["bodySchema"]?.ToJsonString();
         Body = RequestBodyViewModel.FromModel(request.Body, filePickerService, schemaValidator, bodySchema);
-        Auth = RequestAuthViewModel.FromModel(request.Auth);
+        Auth = new RequestAuthViewModel(new TokenRequestEditorViewModel(filePickerService, schemaValidator));
+        Auth.LoadFrom(request.Auth);
         Response = new ResponsePanelViewModel(clipboardService, filePickerService, statusLog, schemaValidator, jsonPathEvaluator);
         // A success-response JSON Schema stashed by the OpenAPI importer lets the Response pane validate
         // what actually comes back against what the spec promised.
@@ -145,10 +146,16 @@ public partial class RequestEditorViewModel : ViewModelBase, IDisposable
         // the Auth tab is being edited, not just on next open.
         Auth.PropertyChanged += (_, _) => { MarkDirty(); RecomputeAuthHeaders(); };
 
+        // Edits inside the OAuth2 token-request editor (URL/headers/body/captures/token variable) also
+        // dirty the request and can change the derived Authorization header (it references the access-token
+        // variable), so recompute the same way.
+        Auth.OAuth2.Changed += () => { MarkDirty(); RecomputeAuthHeaders(); };
+
         // The Auth tab's Test button acquires an OAuth token via the provider against the live
         // workspace/environment, storing it in session variables; Verify previews the request.
-        Auth.TestAuthHandler = config => _authProvider.EnsureAsync(config, _workspace, _environmentManager.ActiveEnvironment);
-        Auth.PreviewHandler = config => _authProvider.PreviewTokenRequest(config, _workspace, _environmentManager.ActiveEnvironment);
+        Auth.OAuth2.TestAuthHandler = async config => (await _authProvider.PrepareAsync(config, _workspace, _environmentManager.ActiveEnvironment)).Outcome;
+        Auth.OAuth2.PreviewHandler = config => _authProvider.PreviewTokenRequest(config, _workspace, _environmentManager.ActiveEnvironment);
+        Auth.OAuth2.VariableContext = VariableContext;
 
         // The active environment/secrets-reveal choice can change while this request stays open -
         // re-raise VariableContext's own change so every bound TextBox's tooltip/border re-evaluates.
@@ -163,6 +170,7 @@ public partial class RequestEditorViewModel : ViewModelBase, IDisposable
         if (e.PropertyName is nameof(EnvironmentManagerViewModel.ActiveEnvironment) or nameof(EnvironmentManagerViewModel.SecretsRevealed))
         {
             OnPropertyChanged(nameof(VariableContext));
+            Auth.OAuth2.VariableContext = VariableContext;
         }
     }
 
@@ -281,8 +289,15 @@ public partial class RequestEditorViewModel : ViewModelBase, IDisposable
         try
         {
             var model = BuildRequestModel();
-            model.Headers = Headers.AllEnabledToModel();
+            // Direct + folder-inherited headers, then the real (resolved) auth credential injected the same
+            // way the Send pipeline does - so cURL matches what actually goes on the wire.
+            model.Headers = Headers.SendableToModel();
             var environment = _environmentManager.ActiveEnvironment;
+            if (ResolveEffectiveAuth().Config is { } effectiveAuth)
+            {
+                model = AuthRequestMerge.Inject(model, _authProvider.Apply(effectiveAuth, _workspace, environment));
+            }
+
             var curl = _curlExport.ToCurl(model, s => _variableResolver.Substitute(s, _workspace, environment));
             await _clipboardService.SetTextAsync(curl);
             _statusLog.Log("Copied request as curl.");
@@ -307,7 +322,11 @@ public partial class RequestEditorViewModel : ViewModelBase, IDisposable
         _sendCts = new CancellationTokenSource();
         try
         {
-            var run = new RequestRun(BuildRequestModel(), _workspace, _environmentManager.ActiveEnvironment, ResolveEffectiveAuth().Config);
+            // Send direct + folder-inherited headers; the pipeline's auth prestep injects the resolved
+            // credential (auth-derived rows in the Headers tab are only a preview).
+            var model = BuildRequestModel();
+            model.Headers = Headers.SendableToModel();
+            var run = new RequestRun(model, _workspace, _environmentManager.ActiveEnvironment, ResolveEffectiveAuth().Config);
             ApplyRunResult(await _requestExecution.RunAsync(run, _sendCts.Token));
         }
         finally
@@ -467,8 +486,34 @@ public partial class RequestEditorViewModel : ViewModelBase, IDisposable
     private void RecomputeAuthHeaders()
     {
         var effective = ResolveEffectiveAuth();
-        var headers = effective.Config is null ? [] : AuthHeaderResolver.HeadersFor(effective.Config);
-        Headers.RefreshAuthHeaders(headers, effective.Source);
+        var applied = effective.Config is null ? AppliedAuth.Empty : AuthApplier.BuildPreview(effective.Config);
+        Headers.RefreshAuthHeaders(applied.Headers, effective.Source);
+        RefreshAuthParams(applied.QueryParams, effective.Source);
+    }
+
+    /// <summary>Read-only auth placeholder rows shown in the Params tab (API-key-in-query auth), so the
+    /// user can see the query credential that will be injected at send.</summary>
+    public ObservableCollection<HeaderRowViewModel> AuthParams { get; } = [];
+
+    public bool HasAuthParams => AuthParams.Count > 0;
+
+    private void RefreshAuthParams(IReadOnlyList<KeyValueItem> queryParams, string? source)
+    {
+        AuthParams.Clear();
+        foreach (var p in queryParams)
+        {
+            AuthParams.Add(new HeaderRowViewModel
+            {
+                IsInherited = true,
+                IsAuthDerived = true,
+                SourceName = source ?? "Auth",
+                Key = p.Key,
+                Value = p.Value,
+                Enabled = true,
+            });
+        }
+
+        OnPropertyChanged(nameof(HasAuthParams));
     }
 
     /// <summary>The auth that actually applies to this request - the domain <see cref="EffectiveAuthResolver"/>

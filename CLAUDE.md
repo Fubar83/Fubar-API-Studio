@@ -45,7 +45,7 @@ Infrastructure ── Fubar.Studio.Infrastructure   Adapters: HTTP exec, storage
 - **Ports live in Core**, implementations in Infrastructure, wired in
   `Infrastructure/ServiceCollectionExtensions.cs` (`AddFubarInfrastructure`). Application services are
   registered in `UI/Composition.cs`.
-- **Domain policy lives in Core, not ViewModels**: e.g. `AuthHeaderResolver`, `EffectiveAuthResolver`,
+- **Domain policy lives in Core, not ViewModels**: e.g. `AuthApplier`, `AuthRequestMerge`, `EffectiveAuthResolver`,
   `QueryStringSync`, `HttpHeaderNames`, `AuthDefaults`. Put new business rules there, not in a VM.
 - **Orchestration lives in Application services** (cohesive, feature-grouped), not inline in VMs. The
   send pipeline (auth→execute→captures/assertions→history) is `RequestExecutionService`.

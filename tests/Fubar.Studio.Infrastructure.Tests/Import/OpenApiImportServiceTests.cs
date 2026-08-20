@@ -180,7 +180,7 @@ public class OpenApiImportServiceTests : IDisposable
 
         Assert.Equal("https://api.example.com/v1", production.Variables.Single(v => v.Key == "baseUrl").Value);
         Assert.Contains(production.Variables, v => v.Key == "petId");                       // path param
-        Assert.Contains(production.Variables, v => v.Key == "bearerToken_bearerAuth" && v.IsSecret); // auth secret
+        Assert.Contains(production.Variables, v => v.Key == "bearerToken_bearerAuth" && v.Kind == VariableKind.Secret); // auth secret
 
         // The first imported environment becomes active so {{baseUrl}} resolves immediately.
         var workspace = await _ws.LoadWorkspaceAsync(_root);

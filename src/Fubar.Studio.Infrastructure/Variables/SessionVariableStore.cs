@@ -3,18 +3,19 @@ using Fubar.Studio.Core.Variables;
 
 namespace Fubar.Studio.Infrastructure.Variables;
 
-/// <summary>In-memory <see cref="ISessionVariableStore"/>: a per-workspace map of transient variables
-/// (OAuth tokens/expiry, etc.) that live only for the app session and are never written to disk.</summary>
+/// <summary>In-memory <see cref="ISessionVariableStore"/>: a per-scope (workspace + environment) map of
+/// transient variables (OAuth tokens/expiry, etc.) that live only for the app session and are never
+/// written to disk.</summary>
 public sealed class SessionVariableStore : ISessionVariableStore
 {
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _byWorkspace = new();
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _byScope = new();
 
-    public string? Get(string workspaceId, string key) =>
-        _byWorkspace.TryGetValue(workspaceId, out var map) && map.TryGetValue(key, out var value) ? value : null;
+    public string? Get(string scope, string key) =>
+        _byScope.TryGetValue(scope, out var map) && map.TryGetValue(key, out var value) ? value : null;
 
-    public bool TryGet(string workspaceId, string key, out string value)
+    public bool TryGet(string scope, string key, out string value)
     {
-        if (_byWorkspace.TryGetValue(workspaceId, out var map) && map.TryGetValue(key, out var stored))
+        if (_byScope.TryGetValue(scope, out var map) && map.TryGetValue(key, out var stored))
         {
             value = stored;
             return true;
@@ -24,9 +25,9 @@ public sealed class SessionVariableStore : ISessionVariableStore
         return false;
     }
 
-    public void Set(string workspaceId, string key, string? value)
+    public void Set(string scope, string key, string? value)
     {
-        var map = _byWorkspace.GetOrAdd(workspaceId, _ => new ConcurrentDictionary<string, string>());
+        var map = _byScope.GetOrAdd(scope, _ => new ConcurrentDictionary<string, string>());
         if (value is null)
         {
             map.TryRemove(key, out _);
@@ -36,4 +37,9 @@ public sealed class SessionVariableStore : ISessionVariableStore
             map[key] = value;
         }
     }
+
+    public IReadOnlyDictionary<string, string> Snapshot(string scope) =>
+        _byScope.TryGetValue(scope, out var map)
+            ? new Dictionary<string, string>(map)
+            : new Dictionary<string, string>();
 }

@@ -8,12 +8,24 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **Variable types** (Normal / Secret / Session) on environment variables, replacing the plain
+  "secret" flag. Secret values live in the OS keyring, Session values in an in-memory store, and
+  **neither is ever written to disk**.
+- **OAuth 2.0 as an editable request**: the auth editor now builds the token request like a normal
+  request (method / URL / headers / body) seeded from a **template** (Client Credentials, Refresh
+  Token, or a custom login), with **capture rules** (JSONPath → variable) that extract tokens from
+  the response and **clear on failure**. Existing OAuth2 profiles upgrade on open.
+- Auth now supports **HTTP Basic** and **API key in the query string** end-to-end (previously not
+  applied at send), alongside Bearer, header API key, and OAuth 2.0.
+- The request view shows read-only **auth placeholder rows** (in Headers, and Params for query-key
+  auth) so you can see the credential that will be sent.
 - Response **assertions**: declarative checks (status code, response time, JSONPath value, header
   presence) evaluated after each send and shown pass/fail in the Response pane's Tests tab.
 - **Capture** response values into variables: extract a JSONPath match, header, or status into a
   session-only or environment variable (e.g. a login token) for later requests to use as `{{name}}`.
-- Per-request **timeout** and an in-flight **Cancel** button; a shared session **cookie jar** so
-  `Set-Cookie` from one request is replayed on the next (login-then-call flows).
+- Per-request **timeout** and an in-flight **Cancel** button; a **per-environment session cookie jar**
+  so `Set-Cookie` from one request is replayed on the next (login-then-call flows) without leaking
+  cookies across environments.
 - **Import from curl** (paste a command) and **import a Postman Collection v2.1** export (folders,
   requests, and collection variables → an environment). The workspace Import button is now a menu
   covering OpenAPI / Swagger, Postman, and curl.
@@ -46,10 +58,20 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- **Auth is now a per-environment "prestep" that actually applies the credential.** Previously the
+  Authorization header was only shown/exported, not sent; the send pipeline now runs an acquire→apply
+  prestep and **injects** the resolved headers/query into the outgoing request. OAuth tokens, session
+  captures, and Session-kind variables are scoped **per (workspace, environment)** — a DEV token or
+  cookie never reaches PROD — and an expired token that still 401s triggers **one re-acquire + retry**.
+- Domain auth policy moved to `AuthApplier` / `AuthRequestMerge` in Core (superseding the old
+  header-only `AuthHeaderResolver`).
+- **Redirects are followed with cross-origin credential stripping**: injected auth headers (including
+  custom API-key headers, which .NET's built-in handler does not strip) are dropped on a redirect to a
+  different origin, so a token / API key is never replayed to a host on the other side of a redirect.
 - **Clean-architecture refactor.** Introduced a distinct **Application** layer
   (`Fubar.Studio.Application`) of cohesive use-case services — `RequestExecutionService` now owns the
   send pipeline (auth → execute → captures/assertions → history) that previously lived inline in the
-  request-editor view model. Pushed domain policy down into Core (`AuthHeaderResolver`,
+  request-editor view model. Pushed domain policy down into Core (`AuthApplier`,
   `EffectiveAuthResolver`, `QueryStringSync`, `HttpHeaderNames`, `AuthDefaults`), inverted the
   Presentation→Infrastructure leaks behind Core ports (`IJsonSchemaValidator`, `IJsonPathEvaluator`),
   and replaced hand-wired editor construction with an `IEditorViewModelFactory`. Split the wide
