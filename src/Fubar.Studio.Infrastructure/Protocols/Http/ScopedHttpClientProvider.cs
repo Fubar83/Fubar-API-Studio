@@ -22,7 +22,10 @@ public sealed class ScopedHttpClientProvider : IScopedHttpClientProvider, IDispo
         {
             UseCookies = true,
             CookieContainer = new CookieContainer(),
-            AllowAutoRedirect = true,
+            // Redirects are followed manually by HttpRequestExecutor so it can strip injected credential
+            // headers on a cross-origin hop (the built-in handler only strips `Authorization`, not custom
+            // API-key headers) - see RequestExecutionContext.SensitiveHeaderNames.
+            AllowAutoRedirect = false,
         };
 
         // The executor enforces per-request timeouts via its own linked CancellationTokenSource, so the

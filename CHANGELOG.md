@@ -65,6 +65,9 @@ All notable changes to this project are documented here. The format is based on
   cookie never reaches PROD — and an expired token that still 401s triggers **one re-acquire + retry**.
 - Domain auth policy moved to `AuthApplier` / `AuthRequestMerge` in Core (superseding the old
   header-only `AuthHeaderResolver`).
+- **Redirects are followed with cross-origin credential stripping**: injected auth headers (including
+  custom API-key headers, which .NET's built-in handler does not strip) are dropped on a redirect to a
+  different origin, so a token / API key is never replayed to a host on the other side of a redirect.
 - **Clean-architecture refactor.** Introduced a distinct **Application** layer
   (`Fubar.Studio.Application`) of cohesive use-case services — `RequestExecutionService` now owns the
   send pipeline (auth → execute → captures/assertions → history) that previously lived inline in the

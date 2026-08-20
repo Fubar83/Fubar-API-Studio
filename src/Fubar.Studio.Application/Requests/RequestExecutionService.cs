@@ -28,13 +28,13 @@ public sealed class RequestExecutionService : IRequestExecutionService
 
     public async Task<RequestRunResult> RunAsync(RequestRun run, CancellationToken cancellationToken = default)
     {
-        var context = new RequestExecutionContext(run.Workspace, run.Environment);
         var executor = _executorRegistry.Resolve(run.Request.Kind);
 
         // 1. Auth prestep: acquire (OAuth2) + apply. The applied credential (headers/query) is injected into
         //    a clone used only for execution, so resolved tokens never reach history.
         AuthOutcome? auth = null;
         var requestToExecute = run.Request;
+        IReadOnlyList<string>? sensitiveHeaderNames = null;
         // Only OAuth2 has an "acquire" step worth re-running on a 401.
         var hasAcquireStep = run.EffectiveAuth is { Type: AuthType.OAuth2 };
         if (run.EffectiveAuth is { } effectiveAuth)
@@ -42,9 +42,12 @@ public sealed class RequestExecutionService : IRequestExecutionService
             var prep = await _authProvider.PrepareAsync(effectiveAuth, run.Workspace, run.Environment, forceReacquire: false, cancellationToken);
             auth = prep.Outcome;
             requestToExecute = AuthRequestMerge.Inject(run.Request, prep.Applied);
+            // Names of the injected credential headers, so the executor drops them on a cross-origin redirect.
+            sensitiveHeaderNames = prep.Applied.Headers.Select(h => h.Key).ToList();
         }
 
         // 2. Execute via whichever protocol executor the request's kind resolves to.
+        var context = new RequestExecutionContext(run.Workspace, run.Environment, sensitiveHeaderNames);
         var result = await executor.ExecuteAsync(requestToExecute, context, cancellationToken);
 
         // 2b. Retry once on 401 for acquire-based schemes: force a re-acquire and resend (a stale/expired
