@@ -1,5 +1,6 @@
 using Fubar.Studio.Application.Requests;
 using Fubar.Studio.Core.Models;
+using Fubar.Studio.Core.Protocols;
 using Fubar.Studio.Core.Secrets;
 using Fubar.Studio.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,10 @@ namespace Fubar.Studio.EndToEnd.Tests;
 public static class HttpBin
 {
     public const string BaseUrl = "https://httpbin.org";
+
+    /// <summary>A second, different-origin echo service - used to prove credentials are not forwarded
+    /// across a real cross-host redirect.</summary>
+    public const string OtherHostEcho = "https://postman-echo.com/get";
 
     /// <summary>Skips the calling test unless live e2e is explicitly enabled via <c>FUBAR_E2E=1</c>.</summary>
     public static void RequireLive() =>
@@ -45,6 +50,15 @@ public static class HttpBin
     }
 
     public static RequestModel Get(string url) => new() { Name = "e2e", Method = "GET", Url = url };
+
+    /// <summary>Runs a request through the real pipeline (fresh isolated instance) with the given effective
+    /// auth and optional active environment, returning the raw <see cref="ExecutionResult"/>.</summary>
+    public static async Task<ExecutionResult> Send(AuthConfig? auth, RequestModel request, WorkspaceEnvironment? environment = null)
+    {
+        var (exec, workspace) = Pipeline();
+        var run = await exec.RunAsync(new RequestRun(request, workspace, environment, auth, RecordHistory: false));
+        return run.Result;
+    }
 
     private sealed class NoSecretStore : ISecretStoreService
     {
